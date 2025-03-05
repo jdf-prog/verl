@@ -36,6 +36,12 @@ class NaiveRewardManager:
         reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
 
         already_print_data_sources = {}
+        
+        all_scores = []
+        all_data_sources = []
+        all_prompts = []
+        all_responses = []
+        all_ground_truths = []
 
         for i in range(len(data)):
             data_item = data[i]  # DataProtoItem
@@ -78,5 +84,25 @@ class NaiveRewardManager:
                 print("[response]", response_str)
                 print("[ground_truth]", ground_truth)
                 print("[score]", score)
+                
+            all_scores.append(score)
+            all_data_sources.append(data_source)
+            all_prompts.append(prompt_str)
+            all_responses.append(response_str)
+            all_ground_truths.append(ground_truth)
 
+        import json
+        with open(
+            "./test.json", "w"
+        ) as f:
+            json.dump([
+                {
+                    "data_source": data_source,
+                    "prompt": prompt_str,
+                    "response": response_str,
+                    "ground_truth": ground_truth,
+                    "score": score
+                } for data_source, prompt_str, response_str, ground_truth, score in zip(all_data_sources, all_prompts, all_responses, all_ground_truths, all_scores)
+            ], f)
+            
         return reward_tensor

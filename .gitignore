@@ -117,3 +117,7 @@ tests/e2e/toy_examples/deepspeed/synchronous/output.txt
 
 # data
 *.parquet
+/rm_record
+/test*
+/*.json
+/*.jsonl
