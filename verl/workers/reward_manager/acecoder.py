@@ -99,7 +99,7 @@ class AceCoderRewardManager:
         self.step_idx = 0
         self.n_workers = 64
         self.binary = False
-        self.record_dir = Path(__file__).parent.parent.parent / "rm_record" / f"acecoder_{time.strftime('%Y-%m-%d-%H-%M-%S')}"
+        self.record_dir = Path(__file__).parent.parent.parent.parent / "rm_record" / f"acecoder_{time.strftime('%Y-%m-%d-%H-%M-%S')}"
         self.record_dir.mkdir(parents=True, exist_ok=True)
         try:
             from acecoder import evaluate_test_cases
@@ -139,21 +139,17 @@ class AceCoderRewardManager:
                 'prompt': question,
                 'output': answer,
                 'original_response': response,
-                'tests': test_case,
+                'tests': list(test_case),
                 '_identifier': f"{question_hash}_{i}"
             }
             for i, (question_hash, question, answer, test_case, response) in enumerate(zip(question_hashes, prompt_str, extracted_answers, ground_truth, response_str))
         ]
         ## save samples to a file
-        temp_dir = self.record_dir + "/"
-        temp_file = temp_dir + f"step-{self.step_idx}_{hash_string(''.join(question_hashes))}.jsonl"
+        temp_file = self.record_dir / f"step-{self.step_idx}_{hash_string(''.join(question_hashes))}.jsonl"
         self.step_idx += 1
-        os.makedirs(temp_dir, exist_ok=True)
         with open(temp_file, "w") as f:
             for sample in samples:
                 f.write(json.dumps(sample) + "\n")
-        # python -m openrlhf.cli.eval_test_cases --samples temp_file --n_workers 8 --test_details --output_file output_file
-        # python -m openrlhf.cli.eval_test_cases --samples /root/dongfu/OpenRLHF/temp/a9f6894d094547fb67e2aad4026c4b7c8a8b5889ae79b25ef59c7ef7372cdde3.jsonl --n_workers 8 --test_details --output_file /root/dongfu/OpenRLHF/temp/a9f6894d094547fb67e2aad4026c4b7c8a8b5889ae79b25ef59c7ef7372cdde3.eval_results.jsonl
         output_file = Path(temp_file).with_suffix(f".eval_results{'_binary' if self.binary else ''}.jsonl").absolute()
         command = f"python -m acecoder.eval_test_cases --samples {temp_file} --n_workers {self.n_workers} \
             --extract_solution True --output_file {output_file} --test_details {not self.binary} \
