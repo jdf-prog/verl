@@ -22,7 +22,7 @@ import datasets
 import fire
 from verl.utils.hdfs_io import copy, makedirs
 import argparse
-
+import random
 from verl.utils.reward_score.math import remove_boxed, last_boxed_only_string
 from llm_engines import LLMEngine
 from verl.utils.reward_score import prime_math
@@ -32,22 +32,26 @@ def extract_solution(solution_str):
 
 def main(
     data_source='SynthLabsAI/Big-Math-RL-Verified',
-    n=2,
+    n=4,
     temperature=0.6,
     max_tokens=2048,
     model_name='Qwen/Qwen2.5-0.5B-Instruct',
     n_gpu=1,
     local_dir='~/data/big_math_ct',
     hdfs_dir=None,
+    seed=42,
+    upload_hf_repo="DongfuJiang/Big-Math-RL-Verified-CT"
 ):
-    
+    random.seed(seed)  
     print(f"Loading the {data_source} dataset from huggingface...", flush=True)
-    dataset = datasets.load_dataset(data_source, trust_remote_code=True, split='train')
-    dataset = dataset.train_test_split(test_size=1000)
-    train_dataset = dataset['train'].select(range(1000))
-    test_dataset = dataset['test'].select(range(200))
-    train_dataset = train_dataset
-    test_dataset = test_dataset
+    dataset = datasets.load_dataset(data_source, trust_remote_code=True)
+    dataset = dataset['train'].train_test_split(test_size=1000, seed=seed)
+    train_dataset = dataset['train']
+    test_dataset = dataset['test']
+    # for debug
+    train_dataset = train_dataset.select(range(10))
+    test_dataset = test_dataset.select(range(20))
+    # for debug
     llm = LLMEngine()
     llm.load_model(
         model_name=model_name,
@@ -68,39 +72,72 @@ def main(
 
         def process_fn(example, idx):
             question = example.pop('problem')
-            answer = example.pop('solution')
-            solution = extract_solution(answer)
-            final_data = []
-            for output in example['output']:
-                
-                ct_question = "Give the following problem and an answer, please judge whether the answer is correct or not: \nQuestion: " + question \
-                    + "\nAnswer: " + output + "\n\nLet's analyze the answer step by step first to judge each step's correctness. And finally output the final judgement as \\boxed{Correct} or \\boxed{Incorrect}. Note the step by step analysis is necessary before the final judgement, so please do it as detailed as possible."
-
-                ground_truth = prime_math.compute_score(output, solution)[0]
-                data = {
-                    "data_source": "math_ct",
-                    "prompt": [{
-                        "role": "user",
-                        "content": ct_question
-                    }],
-                    "ability": "math",
-                    "reward_model": {
-                        "style": "rule",
-                        "ground_truth": "Correct" if ground_truth else "Incorrect"
-                        # "ground_truth": ground_truth
-                    },
-                    "extra_info": {
-                        'split': split,
-                        'index': idx,
-                        'output': output,
-                        'solution': solution,
-                    }
+            solution = example['answer']
+            output_scores = [int(prime_math.compute_score(output, solution)[0]) for output in example['output']]
+            final_data = {
+                "data_source": data_source,
+                "prompt": [{
+                    "role": "user",
+                    "content": question
+                }],
+                "ability": "math",
+                "reward_model": {
+                    "style": "rule",
+                    "ground_truth": solution
+                    # "ground_truth": ground_truth
+                },
+                "extra_info": {
+                    'split': split,
+                    'index': idx,
+                    'outputs': example['output'],
+                    'outputs_scores': output_scores,
                 }
-                final_data.append(data)
-            return {
-                "batch": final_data
             }
-
+            
+            final_pair_data = []
+            if all([x == output_scores[0] for x in output_scores]):
+                pass
+            else:
+                correct_outputs = [output for output, score in zip(example['output'], output_scores) if score]
+                incorrect_outputs = [output for output, score in zip(example['output'], output_scores) if not score]
+                # construct pair from correct and incorrect outputs
+                for correct_output in correct_outputs:
+                    for incorrect_output in incorrect_outputs:
+                        
+                        if random.random() > 0.5:
+                            answer_1 = correct_output
+                            answer_2 = incorrect_output
+                            ground_truth = "Answer 1 is correct"
+                        else:
+                            answer_1 = incorrect_output
+                            answer_2 = correct_output
+                            ground_truth = "Answer 2 is correct"
+                        ct_question = "Give the following problem and two answers, please judge which answer is correct and which answer is incorrect: \nQuestion: " + question \
+                            + "\nAnswer 1: " + answer_1 + "\nAnswer 2: " + answer_2 + "\n\nLet's analyze the answer step by step first for each answer to judge each step's correctness. And finally output the final judgement as \\boxed{Answer 1 is correct} or \\boxed{Answer 2 is correct}. Note the step by step analysis is necessary before the final judgement, so please do it as detailed as possible."
+                            
+                        data = {
+                            "data_source": "math_ct",
+                            "prompt": [{
+                                "role": "user",
+                                "content": ct_question
+                            }],
+                            "ability": "math",
+                            "reward_model": {
+                                "style": "rule",
+                                "ground_truth": ground_truth
+                            },
+                            "extra_info": {
+                                'split': split,
+                                'index': idx,
+                                'solution': solution,
+                            }
+                        }
+                        final_pair_data.append(data)
+            return {
+                "batch_pair_data": final_pair_data,
+                "data": final_data
+            }
+            
         return process_fn
 
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
@@ -108,24 +145,49 @@ def main(
     
     flatten_train_dataset = []
     flatten_test_dataset = []
+    flatten_train_pair_dataset = []
+    flatten_test_pair_dataset = []
     for x in train_dataset:
-        flatten_train_dataset += x['batch']
+        flatten_train_dataset.append(x['data'])
+        flatten_train_pair_dataset += x['batch_pair_data']
     for x in test_dataset:
-        flatten_test_dataset += x['batch']
+        flatten_test_dataset.append(x['data'])
+        flatten_test_pair_dataset += x['batch_pair_data']
+    
     train_dataset = datasets.Dataset.from_list(flatten_train_dataset)
     test_dataset = datasets.Dataset.from_list(flatten_test_dataset)
+    train_pair_dataset = datasets.Dataset.from_list(flatten_train_pair_dataset)
+    test_pair_dataset = datasets.Dataset.from_list(flatten_test_pair_dataset)
+    
+    # # upload to hugging face
+    train_dataset.push_to_hub(upload_hf_repo, config_name='main', split='train')
+    test_dataset.push_to_hub(upload_hf_repo, config_name='main', split='test')
+    train_pair_dataset.push_to_hub(upload_hf_repo, config_name='pair', split='train')
+    test_pair_dataset.push_to_hub(upload_hf_repo, config_name='pair', split='test')
     
 
-    train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
-    test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
+    # train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
+    # test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
     
-    train_dataset.to_json("./train.jsonl")
+    # train_dataset.to_json("./train.jsonl")
 
-    if hdfs_dir is not None:
-        makedirs(hdfs_dir)
+    # if hdfs_dir is not None:
+    #     makedirs(hdfs_dir)
 
-        copy(src=local_dir, dst=hdfs_dir)
+    #     copy(src=local_dir, dst=hdfs_dir)
     
 
 if __name__ == '__main__':
     fire.Fire(main)
+    
+"""
+Installations:
+```
+pip install torch
+pip install verl
+pip instlal llm-engines
+pip install flash-attn --no-build-isolation
+pip install datasets
+```
+python math_pair_ct.py --upload_hf_repo "DongfuJiang/Big-Math-RL-Verified-CT"
+"""
