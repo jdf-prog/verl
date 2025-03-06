@@ -31,18 +31,19 @@ def extract_solution(solution_str):
     return remove_boxed(last_boxed_only_string(solution_str))
 
 def main(
-    data_source='DigitalLearningGmbH/MATH-lighteval',
+    data_source='SynthLabsAI/Big-Math-RL-Verified',
     n=2,
     temperature=0.6,
     max_tokens=2048,
     model_name='Qwen/Qwen2.5-0.5B-Instruct',
     n_gpu=1,
-    local_dir='~/data/math_ct',
+    local_dir='~/data/big_math_ct',
     hdfs_dir=None,
 ):
     
     print(f"Loading the {data_source} dataset from huggingface...", flush=True)
-    dataset = datasets.load_dataset(data_source, trust_remote_code=True)
+    dataset = datasets.load_dataset(data_source, trust_remote_code=True, split='train')
+    dataset = dataset.train_test_split(test_size=1000)
     train_dataset = dataset['train'].select(range(1000))
     test_dataset = dataset['test'].select(range(200))
     train_dataset = train_dataset
@@ -73,11 +74,11 @@ def main(
             for output in example['output']:
                 
                 ct_question = "Give the following problem and an answer, please judge whether the answer is correct or not: \nQuestion: " + question \
-                    + "\nAnswer: " + output + "\nLet's analyze the answer step by step and output the final judgement within \\boxed{} with 'Correct' or 'Incorrect'."
+                    + "\nAnswer: " + output + "\n\nLet's analyze the answer step by step first to judge each step's correctness. And finally output the final judgement as \\boxed{Correct} or \\boxed{Incorrect}. Note the step by step analysis is necessary before the final judgement, so please do it as detailed as possible."
 
                 ground_truth = prime_math.compute_score(output, solution)[0]
                 data = {
-                    "data_source": data_source,
+                    "data_source": "math_ct",
                     "prompt": [{
                         "role": "user",
                         "content": ct_question
