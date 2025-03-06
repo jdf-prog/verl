@@ -190,5 +190,6 @@ pip install flash-attn --no-build-isolation
 pip install datasets
 ```
 python math_pair_ct.py --upload_hf_repo "DongfuJiang/Big-Math-RL-Verified-CT" --debug True
-python math_pair_ct.py --upload_hf_repo "DongfuJiang/Big-Math-RL-Verified-CT"
+# official run
+python math_pair_ct.py --upload_hf_repo "DongfuJiang/Big-Math-RL-Verified-CT" --model_name 'Qwen/Qwen2.5-7B-Instruct' --n_gpu 8 -n 4 --temperature 0.6 --max_tokens 2048
 """
