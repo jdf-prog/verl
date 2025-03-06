@@ -40,7 +40,8 @@ def main(
     local_dir='~/data/big_math_ct',
     hdfs_dir=None,
     seed=42,
-    upload_hf_repo="DongfuJiang/Big-Math-RL-Verified-CT"
+    upload_hf_repo="DongfuJiang/Big-Math-RL-Verified-CT",
+    debug=False,
 ):
     random.seed(seed)  
     print(f"Loading the {data_source} dataset from huggingface...", flush=True)
@@ -48,10 +49,9 @@ def main(
     dataset = dataset['train'].train_test_split(test_size=1000, seed=seed)
     train_dataset = dataset['train']
     test_dataset = dataset['test']
-    # for debug
-    train_dataset = train_dataset.select(range(10))
-    test_dataset = test_dataset.select(range(20))
-    # for debug
+    if debug:
+        train_dataset = train_dataset.select(range(10))
+        test_dataset = test_dataset.select(range(20))
     llm = LLMEngine()
     llm.load_model(
         model_name=model_name,
@@ -189,5 +189,6 @@ pip instlal llm-engines
 pip install flash-attn --no-build-isolation
 pip install datasets
 ```
+python math_pair_ct.py --upload_hf_repo "DongfuJiang/Big-Math-RL-Verified-CT" --debug True
 python math_pair_ct.py --upload_hf_repo "DongfuJiang/Big-Math-RL-Verified-CT"
 """
