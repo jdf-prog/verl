@@ -30,6 +30,26 @@ from verl.utils.reward_score import prime_math
 def extract_solution(solution_str):
     return remove_boxed(last_boxed_only_string(solution_str))
 
+
+pair_prompt="""Please provide a detailed comparative analysis of Answer 1 and Answer 2 based on the following criteria:
+
+1. Mathematical/logical accuracy: Identify any calculation errors, logical flaws, or incorrect assumptions
+2. Methodology: Evaluate the approach used in each answer
+3. Completeness: Assess whether all aspects of the problem were addressed
+4. Clarity: Consider how clearly the reasoning is presented
+
+For each criterion, explain:
+- The strengths and weaknesses of both answers
+- Specific examples from each answer to support your analysis
+- How the differences impact the overall correctness
+
+After your detailed analysis, provide your final verdict as either:
+\\boxed{Answer 1 is correct} or \\boxed{Answer 2 is correct}
+
+If both answers contain errors or if they're both correct but through different approaches, explain this nuance before providing your verdict on which is ultimately more accurate or complete.
+
+Important: Your analysis must go beyond simply repeating or paraphrasing the answers. Focus on meaningful comparison and evaluation.
+"""
 def main(
     data_source='SynthLabsAI/Big-Math-RL-Verified',
     n=4,
@@ -113,7 +133,7 @@ def main(
                             answer_2 = correct_output
                             ground_truth = "Answer 2 is correct"
                         ct_question = "Give the following problem and two answers, please judge which answer is correct and which answer is incorrect: \nQuestion: " + question \
-                            + "\nAnswer 1: " + answer_1 + "\nAnswer 2: " + answer_2 + "\n\nLet's compare the answer 1 and answer 2 step by step first to judge each step's correctness. And finally output the final judgement as \\boxed{Answer 1 is correct} or \\boxed{Answer 2 is correct}. Note the step by step analysis is necessary before the final judgement, so please do it as detailed as possible."
+                            + "\nAnswer 1: " + answer_1 + "\nAnswer 2: " + answer_2 + "\n" + pair_prompt
                             
                         data = {
                             "data_source": "math_ct",
@@ -159,11 +179,11 @@ def main(
     train_pair_dataset = datasets.Dataset.from_list(flatten_train_pair_dataset)
     test_pair_dataset = datasets.Dataset.from_list(flatten_test_pair_dataset)
     
-    # # upload to hugging face
-    train_dataset.push_to_hub(upload_hf_repo, config_name='main', split='train')
-    test_dataset.push_to_hub(upload_hf_repo, config_name='main', split='test')
-    train_pair_dataset.push_to_hub(upload_hf_repo, config_name='pair', split='train')
-    test_pair_dataset.push_to_hub(upload_hf_repo, config_name='pair', split='test')
+    # # # upload to hugging face
+    # train_dataset.push_to_hub(upload_hf_repo, config_name='main', split='train')
+    # test_dataset.push_to_hub(upload_hf_repo, config_name='main', split='test')
+    # train_pair_dataset.push_to_hub(upload_hf_repo, config_name='pair', split='train')
+    # test_pair_dataset.push_to_hub(upload_hf_repo, config_name='pair', split='test')
     
 
     train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))

@@ -31,18 +31,14 @@ def compute_score(solution_str, ground_truth) -> float:
     if not do_adaptive_reward:
         return retval
     else:
-        # check if model also have other ground truth, then give -1 penalty
-        match_counter = 0
-        for key in ground_truth_counter:
-            if string_in_last_boxed is not None:
-                answer = remove_boxed(string_in_last_boxed)
-                if is_equiv(answer, key):
-                    match_counter += 1
-        if match_counter > 1:
-            return -1.
         # adaptive reward to balance the number of times the same answer is given
         ground_truth_counter[ground_truth] = ground_truth_counter.get(ground_truth, 0) + 1
         total_counter += 1
+        multiple_ground_truth_counter = sum([
+            "\\boxed{" + x + "}" in solution_str for x in ground_truth_counter.keys()
+        ])
+        if multiple_ground_truth_counter > 1:
+            return -1.
         if retval == 1:
             reward = retval + (total_counter - ground_truth_counter[ground_truth]) / total_counter
         else:
