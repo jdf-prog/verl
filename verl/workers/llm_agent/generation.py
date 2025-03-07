@@ -7,12 +7,10 @@ from dataclasses import dataclass
 from .tensor_helper import TensorHelper, TensorConfig
 from verl import DataProto
 from verl.utils.tracking import Tracking
+from tqdm import tqdm
 import requests
 from typing import List
-import multiprocessing
-import subprocess
-import sys
-import io
+from .exec_utils import batch_execute
 
 
 @dataclass
@@ -24,7 +22,6 @@ class GenerationConfig:
     max_obs_length: int
     # logging: dict
     num_gpus: int
-    no_think_rl: bool=False
     search_url: str = None
     topk: int = 3
 
@@ -73,12 +70,6 @@ class LLMGenerationManager:
                  else resp
                  for resp in responses_str]
 
-        if self.config.no_think_rl:
-            raise ValueError('stop')
-            # if no_think_rl is enabled, only keep action in the str
-            actions, _ = self.env.postprocess_predictions(responses_str)
-            responses_str=[f"<answer>{envs[idx].ACTION_LOOKUP[action]}</answer>" for idx, action in enumerate(actions)]
-            print("RESPONSES:", responses_str)
         responses = self._batch_tokenize(responses_str)
         return responses, responses_str
 
@@ -202,6 +193,7 @@ class LLMGenerationManager:
 
         # Main generation loop
         for step in range(self.config.max_turns):
+            print(f"Step {step+1}/{self.config.max_turns}")
             if not active_mask.sum():
                 break
             rollings.batch = self.tensor_fn.cut_to_effective_len(
@@ -319,13 +311,17 @@ class LLMGenerationManager:
         Returns:
             List of observation strings
         """
+        import json
+        with open('predictions.json', 'w') as f:
+            json.dump(predictions, f, indent=4)
+        
         cur_actions, contents = self.postprocess_predictions(predictions)
         next_obs, dones = [], []
         
         # search_queries = [content for action, content in zip(cur_actions, contents) if action == 'search']
         python_queries = [content for action, content in zip(cur_actions, contents) if action == 'python']
         if do_execute:
-            python_results = self.batch_execute(python_queries)
+            python_results = batch_execute(python_queries)
             assert len(python_results) == sum([1 for action in cur_actions if action == 'python'])
         else:
             python_results = [''] * sum([1 for action in cur_actions if action == 'python'])
@@ -389,66 +385,6 @@ If I want to give the final answer, I should put the answer between <answer> and
             
         return actions, contents
     
-    def _execute_program(self, query: str) -> str:
-        """
-        Execute a single Python program and return its output.
-        
-        Args:
-            query: Python program to execute as a string
-        
-        Returns:
-            String containing both stdout and stderr outputs
-        """
-        # Create string buffers to capture output
-        stdout_buffer = io.StringIO()
-        stderr_buffer = io.StringIO()
-        
-        result = ""
-        
-        try:
-            # Create a separate process for execution using subprocess
-            process = subprocess.Popen(
-                [sys.executable, "-c", query],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            
-            # Capture output and errors
-            stdout, stderr = process.communicate()
-            
-            # Combine the outputs
-            result = stdout
-            if stderr:
-                result += f"\nERROR:\n{stderr}"
-                
-        except Exception as e:
-            # Capture any exceptions that might occur during execution
-            result = f"Error executing program: {str(e)}"
-        
-        return result
-
-
-    def batch_execute(self, queries: List[str] = None) -> List[str]:
-        """
-        Batchified programs to be executed using multiprocessing.
-        
-        Args:
-            queries: Python programs to execute
-            
-        Returns:
-            List of strings where each string contains the standard output 
-            and standard error of the corresponding program
-        """
-        if queries is None or len(queries) == 0:
-            return []
-        
-        # Create a pool of worker processes
-        with multiprocessing.Pool(64) as pool:
-            # Map each query to a separate process
-            results = pool.map(self._execute_program, queries)
-        
-        return results
 
 
     def batch_search(self, queries: List[str] = None) -> str:

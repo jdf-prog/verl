@@ -926,7 +926,6 @@ class RayPPOTrainer(object):
             max_response_length=self.config.data.max_response_length,
             max_obs_length=self.config.data.max_obs_length,
             num_gpus=self.config.trainer.n_gpus_per_node,
-            no_think_rl=self.config.algorithm.no_think_rl,
         )
 
         generation_manager = LLMGenerationManager(

@@ -1,9 +1,14 @@
+export HYDRA_FULL_ERROR=1
 PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
  data.train_files=$HOME/data/acecoder/train.parquet \
  data.val_files=$HOME/data/acecoder/test.parquet \
  data.train_batch_size=256 \
- data.max_prompt_length=512 \
- data.max_response_length=256 \
+ data.max_prompt_length=2048 \
+ data.max_response_length=4096 \
+ +data.max_start_length=2048 \
+ +data.max_obs_length=512 \
+ +max_turns=10 \
+ +do_execute=False \
  reward_model.reward_manager=acecoder \
  actor_rollout_ref.model.path=Qwen/Qwen2.5-0.5B-Instruct \
  actor_rollout_ref.actor.optim.lr=1e-6 \
@@ -12,6 +17,9 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
  actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=8 \
  actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
  actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
+ actor_rollout_ref.rollout.temperature=0.6 \
+ actor_rollout_ref.rollout.top_k=-1 \
+ actor_rollout_ref.rollout.top_p=1.0 \
  actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=4 \
  critic.optim.lr=1e-5 \
  critic.model.path=Qwen/Qwen2.5-0.5B-Instruct \
@@ -25,3 +33,6 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
  trainer.save_freq=10 \
  trainer.test_freq=10 \
  trainer.total_epochs=15 2>&1 | tee verl_demo.log
+
+
+#  +actor_rollout_ref.rollout.stop="'</python>'" \
