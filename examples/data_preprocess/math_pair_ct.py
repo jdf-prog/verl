@@ -50,8 +50,8 @@ def main(
     train_dataset = dataset['train']
     test_dataset = dataset['test']
     if debug:
-        train_dataset = train_dataset.select(range(10))
-        test_dataset = test_dataset.select(range(20))
+        train_dataset = train_dataset.select(range(10000))
+        test_dataset = test_dataset
     llm = LLMEngine()
     llm.load_model(
         model_name=model_name,
@@ -113,7 +113,7 @@ def main(
                             answer_2 = correct_output
                             ground_truth = "Answer 2 is correct"
                         ct_question = "Give the following problem and two answers, please judge which answer is correct and which answer is incorrect: \nQuestion: " + question \
-                            + "\nAnswer 1: " + answer_1 + "\nAnswer 2: " + answer_2 + "\n\nLet's analyze the answer step by step first for each answer to judge each step's correctness. And finally output the final judgement as \\boxed{Answer 1 is correct} or \\boxed{Answer 2 is correct}. Note the step by step analysis is necessary before the final judgement, so please do it as detailed as possible."
+                            + "\nAnswer 1: " + answer_1 + "\nAnswer 2: " + answer_2 + "\n\nLet's compare the answer 1 and answer 2 step by step first to judge each step's correctness. And finally output the final judgement as \\boxed{Answer 1 is correct} or \\boxed{Answer 2 is correct}. Note the step by step analysis is necessary before the final judgement, so please do it as detailed as possible."
                             
                         data = {
                             "data_source": "math_ct",
@@ -166,8 +166,10 @@ def main(
     test_pair_dataset.push_to_hub(upload_hf_repo, config_name='pair', split='test')
     
 
-    # train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
-    # test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
+    train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
+    test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
+    train_pair_dataset.to_parquet(os.path.join(local_dir, 'train_pair.parquet'))
+    test_pair_dataset.to_parquet(os.path.join(local_dir, 'test_pair.parquet'))
     
     # train_dataset.to_json("./train.jsonl")
 
@@ -191,5 +193,5 @@ pip install datasets
 ```
 python math_pair_ct.py --upload_hf_repo "DongfuJiang/Big-Math-RL-Verified-CT" --debug True
 # official run
-python math_pair_ct.py --upload_hf_repo "DongfuJiang/Big-Math-RL-Verified-CT" --model_name 'Qwen/Qwen2.5-7B-Instruct' --n_gpu 8 -n 4 --temperature 0.6 --max_tokens 2048
+python math_pair_ct.py --upload_hf_repo "DongfuJiang/Big-Math-RL-Verified-CT" --model_name 'Qwen/Qwen2.5-7B-Instruct' --n_gpu 1 -n 4 --temperature 0.6 --max_tokens 2048 --debug True
 """
