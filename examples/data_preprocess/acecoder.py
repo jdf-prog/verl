@@ -22,6 +22,10 @@ import datasets
 from verl.utils.hdfs_io import copy, makedirs
 import argparse
 
+execution_prompt = """\
+Answer the given coding question. You must conduct reasoning inside <think> and </think> first before you can finally output the final program. During the thinking, you can test your program by writing it inside <python> and </python> tags. The code will be executed, and the terminal output (standard output and standard error) will be returned between <output> and </output>. Each program between <python> and </python> tags are independent program. You can run Python code as many times as you want. If you find no further code execution needed, you can then give the final program in a markdown code block like this: ```python\nyour code here\n```. The final program will be evaluated against the test cases. If the final program passes all the test cases, you will get a reward. If the final program fails any of the test cases, you will get a penalty.
+"""
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--local_dir', default='~/data/acecoder')
@@ -47,7 +51,8 @@ if __name__ == '__main__':
         def process_fn(example, idx):
             question_raw = example.pop('question')
 
-            question = question_raw + ' ' + instruction_following
+            # question = question_raw + ' ' + instruction_following
+            question = question_raw + '\n\n' + execution_prompt
             
             tests = example.pop('tests')
             data = {
