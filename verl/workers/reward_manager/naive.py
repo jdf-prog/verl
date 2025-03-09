@@ -15,7 +15,8 @@
 from verl import DataProto
 from verl.utils.reward_score import _default_compute_score
 import torch
-
+from pathlib import Path
+import json
 
 class NaiveRewardManager:
     """The reward manager.
@@ -25,6 +26,9 @@ class NaiveRewardManager:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.compute_score = compute_score or _default_compute_score
+        self.step = 0
+        self.save_dir = Path("./temp_verl_results")
+        self.save_dir.mkdir(exist_ok=True)
 
     def __call__(self, data: DataProto):
         """We will expand this function gradually based on the available datasets"""
@@ -90,10 +94,11 @@ class NaiveRewardManager:
             all_prompts.append(prompt_str)
             all_responses.append(response_str)
             all_ground_truths.append(ground_truth)
-
-        import json
+            
+        self.step += 1
+        step_file = self.save_dir / f"step_{self.step}.json"
         with open(
-            "./test.json", "w"
+            step_file, "w"
         ) as f:
             json.dump([
                 {
