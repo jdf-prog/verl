@@ -15,7 +15,7 @@
 
 ground_truth_counter = {}
 total_counter = 0
-do_adaptive_reward = True
+do_adaptive_reward = False
 def compute_score(solution_str, ground_truth) -> float:
     global ground_truth_counter, total_counter, do_adaptive_reward
     retval = 0.

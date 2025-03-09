@@ -1,0 +1,45 @@
+train_data=$HOME/data/big_math_rl_pair_ct/train.parquet
+val_data=$HOME/data/big_math_rl_pair_ct/test.parquet
+run_name=big_math_rl_pair_ct_adapt
+model_name=Qwen/Qwen2.5-0.5B-Instruct
+rl_alg=grpo # gae(ppo) or grpo, if grpo, then better set n>1 otherwise the group norm can not be effective
+n_gpus_per_node=2
+n_nodes=1
+
+# to accelerate, try increase ppo_micro_batch_size_per_gpu, log_prob_micro_batch_size_per_gpu
+
+PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
+    algorithm.adv_estimator=$rl_alg \
+    data.train_files=$train_data \
+    data.val_files=$val_data \
+    data.train_batch_size=256 \
+    data.max_prompt_length=2048 \
+    data.max_response_length=2048 \
+    actor_rollout_ref.model.path=$model_name \
+    actor_rollout_ref.model.enable_gradient_checkpointing=True \
+    actor_rollout_ref.actor.optim.lr=1e-6 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=64 \
+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=4 \
+    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=8 \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
+    actor_rollout_ref.rollout.temperature=0.6 \
+    actor_rollout_ref.rollout.top_k=-1 \
+    actor_rollout_ref.rollout.top_p=1.0 \
+    actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=4 \
+    critic.optim.lr=1e-5 \
+    critic.model.path=$model_name \
+    critic.ppo_micro_batch_size_per_gpu=4 \
+    actor_rollout_ref.rollout.n=4 \
+    algorithm.kl_ctrl.kl_coef=0.001 \
+    trainer.logger=['console','wandb'] \
+    trainer.project_name='rlrm' \
+    trainer.experiment_name=$run_name \
+    +trainer.val_before_train=False \
+    trainer.default_hdfs_dir=null \
+    trainer.n_gpus_per_node=$n_gpus_per_node \
+    trainer.nnodes=$n_nodes \
+    trainer.save_freq=10 \
+    trainer.test_freq=10 \
+    trainer.total_epochs=5 2>&1 | tee verl_demo.log
