@@ -51,8 +51,8 @@ if __name__ == '__main__':
         def process_fn(example, idx):
             question_raw = example.pop('question')
 
-            # question = question_raw + ' ' + instruction_following
-            question = question_raw + '\n\n' + execution_prompt
+            question = question_raw + ' ' + instruction_following
+            # question = question_raw + '\n\n' + execution_prompt
             
             tests = example.pop('tests')
             data = {
