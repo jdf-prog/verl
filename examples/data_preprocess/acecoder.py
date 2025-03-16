@@ -14,28 +14,45 @@
 """
 Preprocess the GSM8k dataset to parquet format
 """
-
-import re
+import fire
 import os
 import datasets
-
-from verl.utils.hdfs_io import copy, makedirs
-import argparse
+from pathlib import Path
 
 execution_prompt = """\
 Answer the given coding question. You must conduct reasoning inside <think> and </think> first before you can finally output the final program. During the thinking, you can test your program by writing it inside <python> and </python> tags. The code will be executed, and the terminal output (standard output and standard error) will be returned between <output> and </output>. Each program between <python> and </python> tags are independent program. You can run Python code as many times as you want. If you find no further code execution needed, you can then give the final program in a markdown code block like this: ```python\nyour code here\n```. The final program will be evaluated against the test cases. If the final program passes all the test cases, you will get a reward. If the final program fails any of the test cases, you will get a penalty.
 """
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--local_dir', default='~/data/acecoder')
-    parser.add_argument('--hdfs_dir', default=None)
+naive_instruction = "Let's think step by step and generate the final program in a markdown code block like this: ```python\nyour code here\n```."
 
-    args = parser.parse_args()
+coder_instruction = """\
+Let's think step by step and generate the correct program for this coding question. You should attempt multiple times before give the final program.
+In each attempt, you should 
+- test your program by reviewing the code syntax and logic, and fix any potential issues in the next attempt.
+- imagine a set of test cases based on your understanding of the problem and the constraints. 
+- You then need to test your program with these test cases. Since you are not able to run the program in a real environment, you need to use text to simulate the program running and think loudly to describe how each variable changes during the execution. Finally, see whether the program produces the expected output.
+- if the program fails any of the test cases, you need to debug the program and fix the issues in the next attempt.
+- if the program passes all the test cases, you can then give the final program in a markdown code block like this: ```python\nyour code here\n```.
 
-    data_source = 'CodeDPO/AceCoderV2-mini-processed'
+You are also allowed to analyze the problem with any other domain-specific knowledge you have, like math, physics, etc to help you solve the problem.
 
-    dataset = datasets.load_dataset(data_source, split='train')
+Now start thinking and generate the final program in a markdown code block like this: ```python\nyour code here\n```.
+"""
+
+def main(
+    dataset_path: str = 'CodeDPO/AceCoderV2-mini-processed',
+    local_dir: str = 'data/acecoder',
+    add_execution_prompt: bool = False,
+    detaield_instruction: bool = False
+):
+    local_dir = Path(local_dir) / dataset_path.split('/')[-1]
+    if add_execution_prompt:
+        local_dir = local_dir.parent / (local_dir.name + '-with-execution-prompt')
+    if detaield_instruction:
+        local_dir = local_dir.parent / (local_dir.name + '-detailed')
+    local_dir.mkdir(parents=True, exist_ok=True)
+
+    dataset = datasets.load_dataset(dataset_path, split='train')
 
     # 500 examples for testing
     
@@ -43,20 +60,23 @@ if __name__ == '__main__':
     train_dataset = dataset['train']
     test_dataset = dataset['test']
 
-    instruction_following = "Let's think step by step and generate the final program in a markdown code block like this: ```python\nyour code here\n```."
-
     # add a row to each data item that represents a unique id
     def make_map_fn(split):
 
         def process_fn(example, idx):
             question_raw = example.pop('question')
 
-            question = question_raw + ' ' + instruction_following
-            # question = question_raw + '\n\n' + execution_prompt
+            if not add_execution_prompt:
+                if not detaield_instruction:
+                    question = question_raw + ' ' + naive_instruction
+                else:
+                    question = question_raw + ' ' + coder_instruction
+            else:
+                question = question_raw + ' ' + execution_prompt
             
             tests = example.pop('tests')
             data = {
-                "data_source": data_source,
+                "data_source": "acecoder",
                 "prompt": [{
                     "role": "user",
                     "content": question,
@@ -79,14 +99,21 @@ if __name__ == '__main__':
 
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
-
-    local_dir = args.local_dir
-    hdfs_dir = args.hdfs_dir
+    
+    print(f"Loaded {len(train_dataset)} training samples")
+    print(f"Loaded {len(test_dataset)} testing samples")
+    print(f"Example of a training sample:")
+    print(train_dataset[0])
 
     train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
     test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
+    print(f"Saved to {len(train_dataset)} training samples to {local_dir}/train.parquet")
+    print(f"Saved to {len(test_dataset)} testing samples to {local_dir}/test.parquet")
 
-    if hdfs_dir is not None:
-        makedirs(hdfs_dir)
-
-        copy(src=local_dir, dst=hdfs_dir)
+if __name__ == '__main__':
+    fire.Fire(main)
+    
+"""
+python examples/data_preprocess/acecoder.py --dataset_path CodeDPO/AceCoderV2-mini-processed --local_dir data/acecoder
+python examples/data_preprocess/acecoder.py --dataset_path CodeDPO/AceCoderV2-150K-processed --local_dir data/acecoder
+"""

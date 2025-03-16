@@ -99,7 +99,8 @@ class AceCoderRewardManager:
         self.step_idx = 0
         self.n_workers = 64
         self.binary = False
-        self.record_dir = Path(__file__).parent.parent.parent.parent / "rm_record" / f"acecoder_{time.strftime('%Y-%m-%d-%H-%M-%S')}"
+        self.run_id = os.getenv("VERL_RUN_ID", f"acecoder_{time.strftime('%Y-%m-%d-%H-%M-%S')}")
+        self.record_dir = Path(__file__).parent.parent.parent.parent / "rm_record" / self.run_id
         self.record_dir.mkdir(parents=True, exist_ok=True)
         try:
             from acecoder import evaluate_test_cases
